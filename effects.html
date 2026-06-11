@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TEXT REACTOR</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Bebas+Neue&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #05070a;
+    overflow: hidden;
+    width: 100vw; height: 100vh;
+    cursor: none;
+    font-family: 'Share Tech Mono', monospace;
+  }
+
+  canvas {
+    display: block;
+    position: fixed;
+    inset: 0;
+  }
+
+  #cursor {
+    position: fixed;
+    width: 18px; height: 18px;
+    border: 1.5px solid rgba(0,255,180,0.8);
+    border-radius: 50%;
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+    transition: width 0.12s, height 0.12s, border-color 0.12s, border-radius 0.12s;
+    z-index: 999;
+    mix-blend-mode: screen;
+  }
+
+  /* ── PANEL ── */
+  #panel {
+    position: fixed;
+    top: 0; right: 0;
+    width: 220px;
+    height: 100vh;
+    background: rgba(5,7,10,0.92);
+    border-left: 1px solid rgba(0,255,180,0.12);
+    z-index: 90;
+    display: flex;
+    flex-direction: column;
+    padding: 20px 16px 16px;
+    gap: 22px;
+    backdrop-filter: blur(6px);
+    transition: transform 0.3s cubic-bezier(.4,0,.2,1);
+  }
+
+  #panel.hidden { transform: translateX(220px); }
+
+  #panel-title {
+    font-family: 'Bebas Neue', sans-serif;
+    font-size: 18px;
+    letter-spacing: 0.3em;
+    color: rgba(0,255,180,0.7);
+    border-bottom: 1px solid rgba(0,255,180,0.12);
+    padding-bottom: 10px;
+  }
+
+  .section-label {
+    font-size: 9px;
+    letter-spacing: 0.25em;
+    color: rgba(0,255,180,0.35);
+    margin-bottom: 8px;
+    text-transform: uppercase;
+  }
+
+  .btn-group {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .btn {
+    background: transparent;
+    border: 1px solid rgba(0,255,180,0.18);
+    color: rgba(200,230,220,0.55);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    padding: 7px 10px;
+    cursor: none;
+    text-align: left;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+  }
+
+  .btn:hover, .btn.active {
+    background: rgba(0,255,180,0.08);
+    border-color: rgba(0,255,180,0.6);
+    color: rgba(0,255,180,1);
+  }
+
+  .btn.active {
+    border-left: 3px solid rgba(0,255,180,0.8);
+    padding-left: 8px;
+  }
+
+  /* slider */
+  .slider-row {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .slider-row label {
+    display: flex;
+    justify-content: space-between;
+    font-size: 10px;
+    color: rgba(200,230,220,0.45);
+    letter-spacing: 0.1em;
+  }
+
+  .slider-row label span { color: rgba(0,255,180,0.7); }
+
+  input[type=range] {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 2px;
+    background: rgba(0,255,180,0.15);
+    outline: none;
+    cursor: none;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: rgba(0,255,180,0.85);
+    cursor: none;
+  }
+
+  /* toggle */
+  #toggle-panel {
+    position: fixed;
+    top: 50%;
+    right: 0;
+    transform: translateY(-50%);
+    background: rgba(0,255,180,0.08);
+    border: 1px solid rgba(0,255,180,0.25);
+    border-right: none;
+    color: rgba(0,255,180,0.6);
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.15em;
+    writing-mode: vertical-rl;
+    padding: 14px 6px;
+    cursor: none;
+    z-index: 91;
+    transition: right 0.3s cubic-bezier(.4,0,.2,1), background 0.15s;
+  }
+  #toggle-panel:hover { background: rgba(0,255,180,0.15); color: rgba(0,255,180,1); }
+
+  #info {
+    position: fixed;
+    bottom: 18px; left: 50%;
+    transform: translateX(-50%);
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    color: rgba(0,255,180,0.2);
+    pointer-events: none;
+    z-index: 89;
+    white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="c"></canvas>
+<div id="cursor"></div>
+
+<!-- PANEL -->
+<div id="panel">
+  <div id="panel-title">TEXT REACTOR</div>
+
+  <div>
+    <div class="section-label">Mouse Effect</div>
+    <div class="btn-group" id="fx-group">
+      <button class="btn active" data-fx="repulse">⊙ REPULSE</button>
+      <button class="btn" data-fx="attract">⊕ ATTRACT</button>
+      <button class="btn" data-fx="vortex">↺ VORTEX</button>
+      <button class="btn" data-fx="shatter">✦ SHATTER</button>
+      <button class="btn" data-fx="wave">≋ WAVE FIELD</button>
+      <button class="btn" data-fx="ghost">◌ GHOST</button>
+      <button class="btn" data-fx="gravity">▽ GRAVITY WELL</button>
+    </div>
+  </div>
+
+  <div>
+    <div class="section-label">Layout</div>
+    <div class="btn-group" id="layout-group">
+      <button class="btn active" data-layout="center">▣ CENTERED</button>
+      <button class="btn" data-layout="diagonal">╱ DIAGONAL</button>
+      <button class="btn" data-layout="scattered">⁙ SCATTERED</button>
+      <button class="btn" data-layout="columns">∥ TWO COLUMNS</button>
+      <button class="btn" data-layout="spiral">◎ SPIRAL</button>
+    </div>
+  </div>
+
+  <div>
+    <div class="section-label">Color Scheme</div>
+    <div class="btn-group" id="color-group">
+      <button class="btn active" data-scheme="matrix">MATRIX</button>
+      <button class="btn" data-scheme="fire">FIRE</button>
+      <button class="btn" data-scheme="ice">ICE</button>
+      <button class="btn" data-scheme="mono">MONO</button>
+      <button class="btn" data-scheme="rainbow">RAINBOW</button>
+    </div>
+  </div>
+
+  <div>
+    <div class="slider-row">
+      <label>RADIUS <span id="r-val">140</span></label>
+      <input type="range" id="sl-radius" min="40" max="300" value="140">
+    </div>
+    <div class="slider-row" style="margin-top:12px">
+      <label>FORCE <span id="f-val">90</span></label>
+      <input type="range" id="sl-force" min="10" max="250" value="90">
+    </div>
+    <div class="slider-row" style="margin-top:12px">
+      <label>SPEED <span id="s-val">12</span></label>
+      <input type="range" id="sl-speed" min="2" max="40" value="12">
+    </div>
+  </div>
+</div>
+
+<button id="toggle-panel">CONTROLS</button>
+<div id="info">MOVE MOUSE · CLICK TO PULSE · TAB = PANEL</div>
+
+<script>
+const canvas  = document.getElementById('c');
+const ctx     = canvas.getContext('2d');
+const cursorEl = document.getElementById('cursor');
+const panel   = document.getElementById('panel');
+const toggleBtn = document.getElementById('toggle-panel');
+
+let W, H, mx = -9999, my = -9999;
+let chars = [], frame = 0, clickWave = null;
+let panelOpen = true;
+
+// ── Settings ─────────────────────────────────────────────────────────────────
+let CFG = {
+  fx:      'repulse',
+  layout:  'center',
+  scheme:  'matrix',
+  radius:  140,
+  force:   90,
+  speed:   12,
+};
+
+// ── Programs ──────────────────────────────────────────────────────────────────
+const PROGRAM = `//setting 3mod2 = 3antimodulo2 = 1 and amodb = a antimodulo b we have:
+print("E = 3antimodulo2*mc**2")
+print("E = 3antimodulo2*mc**2")
+print("E = 3antimodulo2*mc**2")
+print("E = 3antimodulo2*mc**2")
+print("E = 3antimodulo2*mc**2")
+print("E = 3antimodulo2*mc**2")
+print("E = 3antimodulo2*mc**2")
+print("E = 3antimodulo2*mc**2")
+print("E = 3antimodulo2*mc**2")
+print("E = 3antimodulo2*mc**2")
+print("E = 3antimodulo2*mc**2")`;
+
+// ── Color schemes ─────────────────────────────────────────────────────────────
+const SCHEMES = {
+  matrix: ch => {
+    if (/[a-z]/.test(ch)) return [0,255,170];
+    if (/[A-Z]/.test(ch)) return [0,200,255];
+    if (/[0-9]/.test(ch)) return [255,220,60];
+    if (/[\(\)\[\]\{\}]/.test(ch)) return [180,255,100];
+    if (/[=<>!+\-\*\/]/.test(ch)) return [255,100,180];
+    return [160,200,180];
+  },
+  fire: ch => {
+    if (/[a-z]/.test(ch)) return [255,80,20];
+    if (/[A-Z]/.test(ch)) return [255,200,30];
+    if (/[0-9]/.test(ch)) return [255,140,0];
+    if (/[\(\)\[\]\{\}]/.test(ch)) return [255,60,10];
+    if (/[=<>!+\-\*\/]/.test(ch)) return [220,50,0];
+    return [255,120,40];
+  },
+  ice: ch => {
+    if (/[a-z]/.test(ch)) return [120,220,255];
+    if (/[A-Z]/.test(ch)) return [200,240,255];
+    if (/[0-9]/.test(ch)) return [80,180,255];
+    if (/[\(\)\[\]\{\}]/.test(ch)) return [160,230,255];
+    if (/[=<>!+\-\*\/]/.test(ch)) return [60,140,220];
+    return [180,230,250];
+  },
+  mono: ch => [200,200,200],
+  rainbow: (ch, idx) => {
+    const h = (idx * 17) % 360;
+    const [r,g,b] = hslToRgb(h/360, 0.9, 0.6);
+    return [r,g,b];
+  },
+};
+
+function hslToRgb(h, s, l) {
+  let r, g, b;
+  if (s === 0) { r = g = b = l; }
+  else {
+    const hue2rgb = (p, q, t) => {
+      if (t < 0) t += 1; if (t > 1) t -= 1;
+      if (t < 1/6) return p + (q-p)*6*t;
+      if (t < 1/2) return q;
+      if (t < 2/3) return p + (q-p)*(2/3-t)*6;
+      return p;
+    };
+    const q = l < 0.5 ? l*(1+s) : l+s-l*s;
+    const p = 2*l - q;
+    r = hue2rgb(p,q,h+1/3);
+    g = hue2rgb(p,q,h);
+    b = hue2rgb(p,q,h-1/3);
+  }
+  return [Math.round(r*255), Math.round(g*255), Math.round(b*255)];
+}
+
+// ── Layouts ───────────────────────────────────────────────────────────────────
+function computeBasePositions(layout) {
+  const lines = PROGRAM.split('\n');
+  const FONT_SIZE = Math.max(12, Math.min(15, W / 75));
+  const LINE_H = FONT_SIZE * 1.55;
+  const COL_W  = FONT_SIZE * 0.62;
+  const totalH = lines.length * LINE_H;
+  const maxLen = Math.max(...lines.map(l => l.length));
+  const totalW = maxLen * COL_W;
+
+  const positions = [];
+  let idx = 0;
+
+  lines.forEach((line, row) => {
+    for (let col = 0; col < line.length; col++) {
+      const ch = line[col];
+      if (ch === ' ') continue;
+
+      let bx, by;
+      const panW = panelOpen ? W - 220 : W;
+
+      switch(layout) {
+        case 'center': {
+          const ox = (panW - totalW) / 2;
+          const oy = (H - totalH) / 2;
+          bx = ox + col * COL_W;
+          by = oy + row * LINE_H;
+          break;
+        }
+        case 'diagonal': {
+          const ox = panW * 0.05;
+          const oy = H * 0.04;
+          bx = ox + col * COL_W + row * 6;
+          by = oy + row * LINE_H + col * 1.2;
+          break;
+        }
+        case 'scattered': {
+          const ox = (panW - totalW) / 2;
+          const oy = (H - totalH) / 2;
+          bx = ox + col * COL_W + Math.sin(idx * 1.7) * 28;
+          by = oy + row * LINE_H + Math.cos(idx * 2.3) * 18;
+          break;
+        }
+        case 'columns': {
+          const halfW = panW / 2;
+          const col2 = idx % 2;
+          const rowInCol = Math.floor(idx / 2);
+          bx = col2 * halfW + (halfW - totalW * 0.5) / 2 + col * COL_W * 0.5;
+          by = H * 0.08 + row * LINE_H * 0.88;
+          break;
+        }
+        case 'spiral': {
+          const t = idx * 0.08;
+          const r = 60 + t * 4.5;
+          const cx = panW / 2;
+          const cy = H / 2;
+          bx = cx + Math.cos(t) * r;
+          by = cy + Math.sin(t) * r * 0.55;
+          break;
+        }
+        default: {
+          const ox = (panW - totalW) / 2;
+          const oy = (H - totalH) / 2;
+          bx = ox + col * COL_W;
+          by = oy + row * LINE_H;
+        }
+      }
+
+      positions.push({ ch, bx, by, idx, row, col, fs: FONT_SIZE });
+      idx++;
+    }
+  });
+  return positions;
+}
+
+// ── Build chars ───────────────────────────────────────────────────────────────
+function buildChars() {
+  const positions = computeBasePositions(CFG.layout);
+  const colorFn = SCHEMES[CFG.scheme];
+  const oldChars = chars.length > 0 ? chars : null;
+
+  chars = positions.map((p, i) => {
+    const [r, g, b] = colorFn(p.ch, i);
+    const old = oldChars && oldChars[i];
+    return {
+      ch: p.ch,
+      bx: p.bx, by: p.by,
+      x:  old ? old.x : p.bx,
+      y:  old ? old.y : p.by,
+      angle: old ? old.angle : 0,
+      scale: old ? old.scale : 1,
+      alpha: old ? old.alpha : 1,
+      vx: 0, vy: 0,
+      r, g, b,
+      fs: p.fs,
+      phase: Math.random() * Math.PI * 2,
+      mass: 0.4 + Math.random() * 0.6,
+    };
+  });
+}
+
+function resize() {
+  W = canvas.width  = window.innerWidth;
+  H = canvas.height = window.innerHeight;
+  buildChars();
+}
+
+function dist2(ax,ay,bx,by) {
+  const dx=ax-bx, dy=ay-by; return dx*dx+dy*dy;
+}
+
+// ── Per-frame effect functions ────────────────────────────────────────────────
+function applyFx(c, t) {
+  const MOUSE_R  = CFG.radius;
+  const MOUSE_R2 = MOUSE_R * MOUSE_R;
+  const FORCE    = CFG.force;
+  const d2 = dist2(mx, my, c.bx, c.by);
+  const d  = Math.sqrt(d2);
+
+  let tx = c.bx, ty = c.by;
+  let targetAngle = 0, targetScale = 1, targetAlpha = 1;
+
+  if (d2 < MOUSE_R2) {
+    const norm  = d / MOUSE_R;
+    const force = 1 - norm;
+    const dx = c.bx - mx, dy = c.by - my;
+    const len = d || 1;
+
+    switch(CFG.fx) {
+      case 'repulse': {
+        const push = FORCE * force / c.mass;
+        tx = c.bx + (dx/len) * push;
+        ty = c.by + (dy/len) * push;
+        targetAngle = (dx/len) * 0.7 * force;
+        targetScale = 1 + 0.5 * force;
+        targetAlpha = 0.4 + 0.6 * norm;
+        const sw = force * 1.5;
+        tx += Math.sin(t*3 + c.phase) * sw * 10;
+        ty += Math.cos(t*3 + c.phase) * sw * 10;
+        break;
+      }
+      case 'attract': {
+        const pull = FORCE * force / c.mass;
+        tx = c.bx - (dx/len) * pull * 0.7;
+        ty = c.by - (dy/len) * pull * 0.7;
+        targetScale = 1 + 0.8 * force;
+        targetAlpha = 0.6 + 0.4 * force;
+        targetAngle = Math.atan2(-dy, -dx) * 0.3 * force;
+        break;
+      }
+      case 'vortex': {
+        const perp_x = -dy/len, perp_y = dx/len;
+        const spin = FORCE * force * 0.9 / c.mass;
+        const out  = (FORCE * 0.3) * force / c.mass;
+        tx = c.bx + perp_x * spin * 0.5 + (dx/len) * out * 0.3;
+        ty = c.by + perp_y * spin * 0.5 + (dy/len) * out * 0.3;
+        targetAngle = Math.atan2(perp_y, perp_x) * 0.8;
+        targetScale = 1 + 0.4 * force;
+        targetAlpha = 0.3 + 0.7 * norm;
+        break;
+      }
+      case 'shatter': {
+        const explode = FORCE * 1.4 * force / c.mass;
+        const randA = c.phase * 6.28;
+        tx = c.bx + Math.cos(randA) * explode;
+        ty = c.by + Math.sin(randA) * explode;
+        targetAngle = c.phase * 3.14 * force * 2;
+        targetScale = 0.4 + 1.4 * force;
+        targetAlpha = 1 - force * 0.6;
+        break;
+      }
+      case 'wave': {
+        const waveMag = FORCE * 0.7 * Math.sin(d * 0.05 - t * 4 + c.phase);
+        tx = c.bx + (dx/len) * waveMag * force;
+        ty = c.by + (dy/len) * waveMag * force;
+        targetAngle = Math.sin(t*3 + c.phase) * 0.5 * force;
+        targetScale = 1 + 0.3 * Math.abs(Math.sin(d * 0.04 - t*3));
+        targetAlpha = 0.5 + 0.5 * Math.abs(Math.sin(d * 0.04 - t*2));
+        break;
+      }
+      case 'ghost': {
+        tx = c.bx + Math.sin(t*2 + c.phase) * FORCE * 0.5 * force;
+        ty = c.by + Math.cos(t*1.7 + c.phase) * FORCE * 0.5 * force;
+        targetAlpha = 0.05 + 0.15 * norm;
+        targetScale = 0.8 + 0.4 * Math.sin(t + c.phase);
+        targetAngle = t * 0.5 + c.phase;
+        break;
+      }
+      case 'gravity': {
+        const G = FORCE * 2;
+        const gForce = G * force * force / c.mass;
+        tx = c.bx - (dx/len) * gForce * 0.6;
+        ty = c.by - (dy/len) * gForce * 0.6 + gForce * 0.15;
+        const orbitAngle = t * 2 * (1/c.mass) + c.phase;
+        tx += Math.cos(orbitAngle) * 15 * force;
+        ty += Math.sin(orbitAngle) * 8  * force;
+        targetScale = 1 + force * 0.6;
+        targetAlpha = 0.3 + 0.7 * force;
+        targetAngle = orbitAngle * 0.4;
+        break;
+      }
+    }
+  }
+
+  // click wave
+  if (clickWave) {
+    const wd = Math.sqrt(dist2(clickWave.x, clickWave.y, c.bx, c.by));
+    const wt = (frame - clickWave.frame) * 0.65;
+    const waveFront = wt * 14;
+    const waveWidth = 65;
+    const wdiff = Math.abs(wd - waveFront);
+    if (wdiff < waveWidth) {
+      const wf = (1 - wdiff/waveWidth) * Math.max(0, 1 - wt*0.018);
+      const a  = Math.atan2(c.by - clickWave.y, c.bx - clickWave.x);
+      tx += Math.cos(a) * wf * 35;
+      ty += Math.sin(a) * wf * 35;
+      targetAngle += wf * 1.4;
+      targetScale  = Math.max(targetScale, 1 + wf * 0.7);
+    }
+  }
+
+  // ambient drift
+  const spd = CFG.speed * 0.001;
+  tx += Math.sin(t * 0.7 + c.phase) * 0.7;
+  ty += Math.cos(t * 0.5 + c.phase * 1.3) * 0.5;
+
+  const EASE = 0.1 + spd * 3;
+  c.x     += (tx - c.x)           * EASE;
+  c.y     += (ty - c.y)           * EASE;
+  c.angle += (targetAngle - c.angle) * EASE;
+  c.scale += (targetScale - c.scale) * EASE;
+  c.alpha += (targetAlpha - c.alpha) * EASE;
+}
+
+// ── Draw loop ─────────────────────────────────────────────────────────────────
+function draw() {
+  frame++;
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#05070a';
+  ctx.fillRect(0, 0, W, H);
+
+  const t = frame * 0.012;
+  const MOUSE_R  = CFG.radius;
+  const MOUSE_R2 = MOUSE_R * MOUSE_R;
+
+  chars.forEach(c => {
+    applyFx(c, t);
+
+    const d2   = dist2(mx, my, c.bx, c.by);
+    const glow = (d2 < MOUSE_R2) ? (1 - Math.sqrt(d2) / MOUSE_R) : 0;
+
+    ctx.save();
+    ctx.translate(c.x, c.y);
+    ctx.rotate(c.angle);
+    ctx.scale(c.scale, c.scale);
+
+    ctx.globalAlpha = Math.max(0.04, c.alpha);
+    ctx.font = `${c.fs}px 'Share Tech Mono', monospace`;
+    ctx.textAlign    = 'left';
+    ctx.textBaseline = 'top';
+
+    if (glow > 0.04) {
+      ctx.shadowColor = `rgb(${c.r},${c.g},${c.b})`;
+      ctx.shadowBlur  = 5 + glow * (CFG.fx === 'ghost' ? 30 : 14);
+    } else {
+      ctx.shadowBlur = 0;
+    }
+
+    ctx.fillStyle = `rgb(${c.r},${c.g},${c.b})`;
+    ctx.fillText(c.ch, 0, 0);
+    ctx.restore();
+  });
+
+  if (clickWave && frame - clickWave.frame > 130) clickWave = null;
+
+  requestAnimationFrame(draw);
+}
+
+// ── Panel controls ────────────────────────────────────────────────────────────
+function setActive(groupId, key, val) {
+  document.querySelectorAll(`#${groupId} .btn`).forEach(b => {
+    b.classList.toggle('active', b.dataset[key] === val);
+  });
+}
+
+document.getElementById('fx-group').addEventListener('click', e => {
+  const btn = e.target.closest('.btn'); if (!btn) return;
+  CFG.fx = btn.dataset.fx;
+  setActive('fx-group', 'fx', CFG.fx);
+  updateCursorShape();
+});
+
+document.getElementById('layout-group').addEventListener('click', e => {
+  const btn = e.target.closest('.btn'); if (!btn) return;
+  CFG.layout = btn.dataset.layout;
+  setActive('layout-group', 'layout', CFG.layout);
+  buildChars();
+});
+
+document.getElementById('color-group').addEventListener('click', e => {
+  const btn = e.target.closest('.btn'); if (!btn) return;
+  CFG.scheme = btn.dataset.scheme;
+  setActive('color-group', 'scheme', CFG.scheme);
+  // recolor in place
+  const colorFn = SCHEMES[CFG.scheme];
+  chars.forEach((c, i) => {
+    const [r,g,b] = colorFn(c.ch, i);
+    c.r = r; c.g = g; c.b = b;
+  });
+});
+
+const slRadius = document.getElementById('sl-radius');
+const slForce  = document.getElementById('sl-force');
+const slSpeed  = document.getElementById('sl-speed');
+const rVal = document.getElementById('r-val');
+const fVal = document.getElementById('f-val');
+const sVal = document.getElementById('s-val');
+
+slRadius.addEventListener('input', () => { CFG.radius = +slRadius.value; rVal.textContent = CFG.radius; });
+slForce .addEventListener('input', () => { CFG.force  = +slForce.value;  fVal.textContent = CFG.force;  });
+slSpeed .addEventListener('input', () => { CFG.speed  = +slSpeed.value;  sVal.textContent = CFG.speed;  });
+
+// panel toggle
+function togglePanel() {
+  panelOpen = !panelOpen;
+  panel.classList.toggle('hidden', !panelOpen);
+  toggleBtn.style.right = panelOpen ? '220px' : '0';
+  setTimeout(buildChars, 320);
+}
+toggleBtn.addEventListener('click', togglePanel);
+document.addEventListener('keydown', e => { if (e.key === 'Tab') { e.preventDefault(); togglePanel(); } });
+
+// ── Cursor shape per fx ───────────────────────────────────────────────────────
+function updateCursorShape() {
+  const shapes = {
+    repulse:  'circle',
+    attract:  'circle',
+    vortex:   'circle',
+    shatter:  'diamond',
+    wave:     'circle',
+    ghost:    'circle',
+    gravity:  'circle',
+  };
+  const s = shapes[CFG.fx];
+  cursorEl.style.borderRadius = s === 'diamond' ? '0' : '50%';
+  cursorEl.style.transform = s === 'diamond'
+    ? 'translate(-50%,-50%) rotate(45deg)'
+    : 'translate(-50%,-50%)';
+}
+
+// ── Mouse / click events ──────────────────────────────────────────────────────
+window.addEventListener('mousemove', e => {
+  mx = e.clientX; my = e.clientY;
+  cursorEl.style.left = mx + 'px';
+  cursorEl.style.top  = my + 'px';
+});
+
+window.addEventListener('click', e => {
+  if (e.target.closest('#panel') || e.target === toggleBtn) return;
+  clickWave = { x: e.clientX, y: e.clientY, frame };
+  cursorEl.style.width  = '36px';
+  cursorEl.style.height = '36px';
+  cursorEl.style.borderColor = 'rgba(255,220,60,0.9)';
+  setTimeout(() => {
+    cursorEl.style.width  = '18px';
+    cursorEl.style.height = '18px';
+    cursorEl.style.borderColor = 'rgba(0,255,180,0.8)';
+  }, 220);
+});
+
+window.addEventListener('resize', resize);
+
+resize();
+draw();
+</script>
+</body>
+</html>
